@@ -1,0 +1,288 @@
+---
+title: "daph"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Getting the DAPH episode 
+
+The code below is adapted from [Pawel Kapuscinski's](http://rpubs.com/aliendeg/daph) brilliant exploration of the Digital Analytics Power Hour podcast transcripts. 
+
+```{r}
+library(rvest)
+library(dplyr)
+library(stringr)
+library(tidytext)
+library(ggplot2)
+library(ggthemes)
+library(tm)
+library(tidyr)
+library(wordcloud)
+library(tm)
+library(knitr)
+library(tidyverse)
+library(forcats)
+library(lubridate)
+
+# Get the highest page count from the site
+max_pages <- read_html("http://www.analyticshour.io/all-podcast-episodes/") %>% 
+  html_nodes("a.page-numbers") %>% 
+  html_text() %>% 
+  as.numeric() %>% 
+  max(na.rm = TRUE)
+
+page_nums <- as.list(1:max_pages)
+
+# Function to get a list of all archive urls along with the episode number and year
+get_url_list <- function(page_num) {
+  x <- read_html(paste0("http://www.analyticshour.io/all-podcast-episodes/page/", page_num))
+
+  # Make a DF containing the url, year and episode number
+  urls <- data.frame( urls = x %>% 
+    html_nodes(paste0("body > div.super-container.light-icons > div.main-content.page.archive-page > div > div > div > div  div > footer > ul > li.title.not-truncate ")) %>%
+    html_children %>% 
+    as.character() %>% 
+    str_extract('\\\".*?\\\"') %>% 
+    str_replace_all(c('\"' = ''))) %>% 
+    separate(urls, 
+             into = c("bin", "bin2", "bin3", "year", "bin4", "bin5", "episode"),
+             sep = "\\/",
+             remove = FALSE) %>% 
+    mutate(urls = as.character(urls), episode = str_replace_all(episode, "\\-.*", "")) %>% 
+    select(urls, year, episode)
+    
+    urls
+}
+
+# Pull the urls list from the site. Ignore the "Too many values" error, this comes from the call to separate()
+full_urls <- map_df(page_nums, get_url_list) 
+
+# Split the url DF into a list so it can be called by map_df below
+full_urls_split <- full_urls %>% 
+  split(.$episode)
+
+# Function to scrape the web content per url, append the episode #, year and speaker name (where known) then tokenize into words
+get_post_content <- function(ep_df) {
+  # Quick line for debugging purposes
+  # print(paste("Running for :", ep_df$url))
+  url <- ep_df$url
+  episode <- ep_df$episode
+  year <- ep_df$year
+  
+  post_html <- read_html(url) 
+  
+  post_ps <- post_html %>% 
+    html_nodes(".post p") %>% 
+    html_text() %>% 
+    as.data.frame()
+  
+  post_title <- post_html %>% 
+    html_nodes(".entry-title") %>% 
+    html_text() %>% 
+    as.character()
+    
+  names(post_ps) <- "text"
+  
+  post_ps <- post_ps %>% 
+    dplyr::filter(str_detect(text, "(\\d{2}:)")) 
+  
+  if (length(post_ps$text != 0)) {
+    post_ps <- post_ps %>% 
+      mutate(
+        text = as.character(text),
+        speaker = case_when(
+          str_detect(text, "(MH:)|(Michael Helbling:)|(Michael:)") ~ "Drunk Helbs",
+          str_detect(text, "(MK:)|(Moe Kiss:)|(Moe:)") ~ "Moe from down under",
+          str_detect(text, "(TW:)|(Tim Wilson:)|(Tim:)") ~ "Grumpy Cat",
+          TRUE ~ "Unknown"
+        ),
+      url = url,
+      episode = as.numeric(episode),
+      year = year,
+      title = post_title,
+      time_start = as.numeric(ms(str_extract(text, "\\d{2}:\\d{2}"))),
+      time_end = lead(time_start, 1),
+      duration = time_end - time_start
+    )
+    post_ps
+  } else {
+    NULL
+  }
+}
+
+daph_post_text <- map_df(full_urls_split, get_post_content)      
+saveRDS(daph_post_text, "datafiles/daph_post_text.rds")
+
+```
+
+
+---
+
+# Longest monologue
+
+Off the bat, we can find out the longest sentence of all time, and who spoke it.
+
+```{r}
+monologue <- daph_post_text %>% 
+  arrange(desc(duration)) %>% 
+  top_n(10, duration) %>% 
+  select(speaker, text, title, duration)
+
+monologue
+```
+
+So, our champion monologue is this gem from Tim Wilson in Episode 71, "Reinforcement Learning with Matt Gershoff". Hats off to Tim for the final sentence. At `monologue$duration[1]` seconds long, it stands a full `avg_duration <- mean(daph_post_text$duration, na.rm = TRUE); monologue$duration[1]-avgduration` seconds above the average speaking length of `avg_duration`s.
+
+```{r}
+monologue$text[1]
+```
+
+---
+
+
+## Tokenize our words
+
+At this point we can split the dataframe out by words, to allow us to run sentiment analysis and word counts for the charts to follow.
+
+```{r}
+
+data("stop_words")
+daph_post_words <- daph_post_text %>% 
+      unnest_tokens(output = word, input = text, format = "text") %>% 
+  anti_join(stop_words) %>% 
+  filter(!str_detect(word, "\\d{2}"))
+saveRDS(daph_post_words, "datafiles/daph_post_words.rds")
+```
+
+---
+
+## Profanity by presenter
+
+To settle the debate for good, which presenter is the most sweary by episode?
+
+```{r}
+swears <- daph_post_words %>% 
+  filter(str_detect(word, "(shit)|(fuck)|(crap)"))
+
+swears_by_speaker <- swears %>% 
+  group_by(episode, speaker) %>% 
+  filter(speaker!= "Unknown") %>% 
+  summarise(ep_count = n()) %>% 
+  ungroup() %>% 
+  group_by(speaker) %>% 
+  summarise(avg_swears = mean(ep_count, na.rm = TRUE)) %>% 
+  mutate(speaker = fct_reorder(speaker, avg_swears))
+
+swears_by_speaker %>% 
+  ggplot(aes(x = speaker, y = avg_swears)) +
+  geom_col(fill = "#3FA0D9") + 
+  theme_hc() + 
+  labs(
+    x = "Speaker",
+    y = "Avg. swear jar deposits per episode",
+    title = "Avg. swear count by speaker",
+    subtitle = "Was there ever any doubt?")
+```
+
+
+# Most talkative presenter
+
+```{r}
+# word count per episode by presenter
+
+
+words_by_speaker <- daph_post_words %>% 
+  group_by(episode, speaker) %>% 
+  filter(speaker!= "Unknown") %>% 
+  summarise(ep_count = n()) %>% 
+  ungroup() 
+
+wbs_overall <- words_by_speaker %>% 
+  group_by(speaker) %>% 
+  summarise(avg_words = mean(ep_count, na.rm = TRUE)) %>% 
+  mutate(speaker = fct_reorder(speaker, avg_words))
+
+wbs_overall %>% 
+  ggplot(aes(x = speaker, y = avg_words)) +
+  geom_col(fill = "#3FA0D9") + 
+  theme_hc() + 
+  xlab('Speaker') + 
+  ylab('Avg words spoken per episode') + 
+  ggtitle("Chatty Catty")
+
+wbs_be <- words_by_speaker %>% 
+  filter(ep_count!=0) %>% 
+  ggplot(aes(as.numeric(episode), ep_count, colour = speaker)) +
+  geom_line(na.rm = TRUE) +
+  geom_point() +
+  labs(
+    title = "Words spoken by episode, by speaker",
+    y = "Words spoken",
+    x = "Episode number",
+    colour = "Speaker Name"
+  )
+library(plotly)
+ggplotly(wbs_be)
+```
+
+# Episode sentiments
+
+```{r}
+daph_sentiment <- daph_post_words %>% 
+  inner_join(get_sentiments("bing")) 
+
+sentiment_by_episode <- daph_sentiment %>% 
+  count(episode, sentiment) %>% 
+  spread(sentiment, n, fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+senti_plot <- sentiment_by_episode %>% 
+  filter(episode > 50) %>% 
+  ggplot(aes(episode, sentiment)) +
+  geom_col()
+
+ggplotly(senti_plot)
+```
+
+Generally, the DAPH team are an optimistic, tree-hugging bunch of people. What happened for episode 69 ("The Biases of the Analyst"), though?
+
+Let's take a look at which words caused all that negative skew.
+
+```{r}
+daph_sentiment %>% 
+  filter(episode == 69) %>% 
+  group_by(word, sentiment) %>% 
+  count() %>% 
+  arrange(sentiment, desc(n))
+```
+
+Turns out "bias" and "biases" are seen as negative words according to the bing sentiment dictionary. If we remove those two words, does it change the outlook?
+
+```{r}
+daph_sentiment %>% 
+  filter(episode == 69, !str_detect(word, "bias")) %>% 
+  group_by(sentiment) %>% 
+  count()
+  
+```
+
+A bit, but it's still a negative episode overall. Words like "hard", "wrong", "disprove" and "shit" all contribute to a negative score overall. So, a happy analyst is an unbiased analyst.
+
+# Happiest episode
+
+Let's cheer ourselves up a bit - what about the happiest episode? That was # 57 (see our plot above).
+
+```{r}
+daph_sentiment %>% 
+  filter(episode == 57) %>% 
+  group_by(word, sentiment) %>% 
+  count() %>% 
+  arrange(desc(sentiment), desc(n))
+```
+
+The language used here is largely descriptive, so we can't deduce too much. However, the subject matter of the episode overall is pretty interesting - that episode was "Open Data with Brett Hurt and Jon Loyens". So we might suggest that Open Data inspired the most excitement and positivity from the podcast team.
+
+

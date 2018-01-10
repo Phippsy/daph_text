@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1515602727192.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "587C462",
+    "lastKnownWriteTime" : 3543890281980456553,
+    "last_content_update" : 1515602727192,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "C820E5A0",
+        "caption" : "daph_post_text",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=daph_post_text&cache_key=C820E5A0",
+        "displayedObservations" : "4916",
+        "environment" : "",
+        "object" : "daph_post_text",
+        "preview" : "0",
+        "totalObservations" : "4916",
+        "variables" : "9"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

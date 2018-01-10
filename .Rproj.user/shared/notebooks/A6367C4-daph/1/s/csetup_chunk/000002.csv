@@ -1,0 +1,8 @@
+"0","knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)"
+"2","Warning message:
+"
+"2","In readLines(input, encoding = ""UTF-8"") :"
+"2","
+ "
+"2"," incomplete final line found on 'C:/Users/donalp/Documents/R/win-library/3.4/jlR/rmarkdown/templates/spark_slides/template.yaml'
+"

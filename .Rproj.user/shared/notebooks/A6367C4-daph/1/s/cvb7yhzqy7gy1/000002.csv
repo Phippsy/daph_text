@@ -1,0 +1,5 @@
+"0","daph_sentiment %>% "
+"0","  filter(episode == 69) %>% "
+"0","  group_by(word, sentiment) %>% "
+"0","  count() %>% "
+"0","  arrange(sentiment, desc(n))"
