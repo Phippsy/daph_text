@@ -2,3 +2,5 @@
 .csv
 data_upload.R
 auth/
+.Rproj.user
+.Rhistory
