@@ -284,7 +284,17 @@ daph_sentiment %>%
 
 The language used here is largely descriptive, so we can't deduce too much. However, the subject matter of the episode overall is pretty interesting - that episode was "Open Data with Brett Hurt and Jon Loyens". So we might suggest that Open Data inspired the most excitement and positivity from the podcast team.
 
+
+
+And he funniest episode is....
+
 ```{r}
-daph_post_words %>% filter(word == 'laughter') %>% group_by(episode) %>% summarise(n = n()) %>% ggplot(aes(x = episode, y = n)) + geom_col(fill = "#EF4A62") + theme_hc() + xlab('Episode') + ylab('Number of laughs') + ggtitle("The funniest episode?")
+daph_post_words %>% 
+  filter(word == 'laughter') %>% 
+  group_by(episode) %>% summarise(n = n()) %>% 
+  ggplot(aes(x = episode, y = n)) + 
+  geom_col(fill = "#EF4A62") + theme_hc() + xlab('Episode') + 
+  ylab('Number of laughs') + ggtitle("The funniest episode?")
 ```
+
 
