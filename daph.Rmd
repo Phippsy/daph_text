@@ -28,7 +28,6 @@ library(forcats)
 library(lubridate)
 library(plotly)
 
-
 # Get the highest page count from the site
 max_pages <- read_html("http://www.analyticshour.io/all-podcast-episodes/") %>% 
   html_nodes("a.page-numbers") %>% 
