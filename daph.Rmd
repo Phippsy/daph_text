@@ -7,9 +7,21 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
-## Getting the DAPH episode 
+## Getting the DAPH episode text
 
 The code below is adapted from [Pawel Kapuscinski's](http://rpubs.com/aliendeg/daph) brilliant exploration of the Digital Analytics Power Hour podcast transcripts. 
+
+It:
+
+- Visits the [DAPH episode listing](http://www.analyticshour.io/all-podcast-episodes/)
+- Scrapes all listing pages and gets a list of URLs 
+- Scrapes each episode URL and pulls the episode transcript into a dataframe - `daph_post_text`.
+- Tokenizes (i.e. breaks each passage of text into a single-row-per word) each episode transcript and appends the sentiment of each word according to the `bing` sentiment dictionary. Stores this in a dataframe, `daph_post_words`.
+
+
+## Getting our list of URLs
+
+Step 1 - load the (many) libraries we'll use and scrape the list of urls for each episode.
 
 ```{r}
 library(rvest)
@@ -60,9 +72,19 @@ get_url_list <- function(page_num) {
 # Pull the urls list from the site. Ignore the "Too many values" error, this comes from the call to separate()
 full_urls <- map_df(page_nums, get_url_list) 
 
-# Split the url DF into a list so it can be called by map_df below
+full_urls
+
+# Split the url DF into a list so it can be iteratively called by map_df in the next step
 full_urls_split <- full_urls %>% 
   split(.$episode)
+
+```
+
+## Scraping the transcripts
+
+Next, we visit each URL in turn, traverse to the transcript and convert into a dataframe. We add on a little metadata in new columns (timecodes for the start & end of a given passage, speaker name, the episode name and episode URL)
+
+```{r}
 
 # Function to scrape the web content per url, append the episode #, year and speaker name (where known) then tokenize into words
 get_post_content <- function(ep_df) {
@@ -74,18 +96,22 @@ get_post_content <- function(ep_df) {
   
   post_html <- read_html(url) 
   
+  # Traverse down to the paragraph elements within the 'post' class
   post_ps <- post_html %>% 
     html_nodes(".post p") %>% 
     html_text() %>% 
     as.data.frame()
   
+  # Get the post title
   post_title <- post_html %>% 
     html_nodes(".entry-title") %>% 
     html_text() %>% 
     as.character()
     
+  # Rename the post_ps variable as it's automatically called '.' when converted from a list, which is problematic.
   names(post_ps) <- "text"
   
+  # Filter to only elements which contain a timecode
   post_ps <- post_ps %>% 
     dplyr::filter(str_detect(text, "(\\d{2}:)")) 
   
@@ -103,7 +129,11 @@ get_post_content <- function(ep_df) {
       episode = as.numeric(episode),
       year = year,
       title = post_title,
-      time_start = as.numeric(ms(str_extract(text, "\\d{2}:\\d{2}"))),
+      # Get the timecodes using regex extraction and handle variable timecode structure
+      time_start = case_when(
+        str_detect(text, "\\d:\\d{2}:\\d{2}") ~ as.numeric(hms(str_extract(text, "\\d:\\d{2}:\\d{2}"))),
+          TRUE ~ as.numeric(ms(str_extract(text, "\\d{2}:\\d{2}")))
+      ),
       time_end = lead(time_start, 1),
       duration = time_end - time_start
     )
@@ -113,13 +143,16 @@ get_post_content <- function(ep_df) {
   }
 }
 
-daph_post_text <- map_df(full_urls_split, get_post_content)      
-saveRDS(daph_post_text, "datafiles/daph_post_text.rds")
-
+daph_post_text <- map_df(full_urls_split, get_post_content) %>% 
+  arrange(episode, time_start)
+saveRDS(daph_post_text, "datafiles/daph_post_text.rds") # Storing as an rds file locally to avoid 
+daph_post_text
 ```
 
 
 ---
+
+Now that we have our post text and post words dataframes, we can take a look at the data.
 
 # Longest monologue
 
@@ -127,6 +160,7 @@ Off the bat, we can find out the longest sentence of all time, and who spoke it.
 
 ```{r}
 monologue <- daph_post_text %>% 
+  filter(speaker != "Unknown") %>% 
   arrange(desc(duration)) %>% 
   top_n(10, duration) %>% 
   select(speaker, text, title, duration)
@@ -148,12 +182,10 @@ monologue$text[1]
 At this point we can split the dataframe out by words, to allow us to run sentiment analysis and word counts for the charts to follow.
 
 ```{r}
-
 data("stop_words")
 daph_post_words <- daph_post_text %>% 
       unnest_tokens(output = word, input = text, format = "text") %>% 
-  anti_join(stop_words) %>% 
-  filter(!str_detect(word, "\\d{2}"))
+  anti_join(stop_words)
 saveRDS(daph_post_words, "datafiles/daph_post_words.rds")
 ```
 
@@ -242,7 +274,12 @@ sentiment_by_episode <- daph_sentiment %>%
 senti_plot <- sentiment_by_episode %>% 
   filter(episode > 50) %>% 
   ggplot(aes(episode, sentiment)) +
-  geom_col()
+  geom_col() +
+  labs(
+    title = "DAPH overall sentiment by episode, 2017",
+    y = "Sentiment (positive - negative)",
+    x = "Episode Number"
+  )
 
 ggplotly(senti_plot)
 ```
