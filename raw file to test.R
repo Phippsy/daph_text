@@ -239,3 +239,14 @@ daph_sentiment %>%
 
 daph_post_words %>% filter(word == 'laughter') %>% group_by(episode) %>% summarise(n = n()) %>% ggplot(aes(x = episode, y = n)) + geom_col(fill = "#EF4A62") + theme_hc() + xlab('Episode') + ylab('Number of laughs') + ggtitle("The funniest episode?")
 
+
+daph_post_words %>% filter(grepl("(shit)|(crap)|fuck", word)) %>% group_by(episode) %>% summarise(n = n()) %>% ggplot(aes(x = episode, y = n)) + geom_col(fill = "#3FA0D9") + theme_hc() + xlab('Episode') + ylab('Number of #$%^') + ggtitle("Not for children!!")
+
+daph_post_words %>% filter(grepl("machine|^ai$|artificial", word)) %>% group_by(episode) %>% summarise(n = n()) %>% ggplot(aes(x = episode, y = n)) + geom_col(fill = "#39308A") + theme_hc() + xlab('Episode') + ylab('Machine learnings / ai mentions') + ggtitle("Machines taking over the world")
+
+daph_post_words %>% filter(grepl("mobile", word)) %>% group_by(episode) %>% summarise(n = n()) %>% ggplot(aes(x = episode, y = n)) + geom_col(fill = "#E2E87A") + theme_hc() + xlab('Episode') + ylab('Mobile mentions') + ggtitle("Another year of mobile")
+
+
+daph_post_words %>% filter(grepl("^adobe$|^google$", word)) %>% group_by(episode,word) %>% summarise(n = n()) %>% ggplot(aes(x = episode, y = n, fill = word)) + geom_col() + theme_hc() + xlab('Episode') + ylab('Adobe vs google mentions') + ggtitle("Google vs adobe") + scale_fill_manual(values = c("#2B2047","#FFC519"))
+
+
