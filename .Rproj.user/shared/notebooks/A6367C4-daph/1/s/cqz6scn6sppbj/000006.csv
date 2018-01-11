@@ -1,6 +1,0 @@
-"0","data(""stop_words"")"
-"0","daph_post_words <- daph_post_text %>% "
-"0","      unnest_tokens(output = word, input = text, format = ""text"") %>% "
-"0","  anti_join(stop_words) %>% "
-"0","  filter(!str_detect(word, ""\\d{2}""))"
-"0","saveRDS(daph_post_words, ""datafiles/daph_post_words.rds"")"

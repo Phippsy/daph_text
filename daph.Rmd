@@ -107,6 +107,17 @@ get_post_content <- function(ep_df) {
     html_nodes(".entry-title") %>% 
     html_text() %>% 
     as.character()
+  
+  # Get the guest name and initials
+  guest <- post_title %>% 
+    str_extract("with [a-zA-Z]* [a-zA-Z]*") %>% 
+    str_replace_all(c("with " = ""))
+  
+  guest_initials <- guest %>% 
+    str_extract_all("\\b[a-zA-Z]") %>% 
+    unlist() %>% 
+    str_c(collapse = "") %>% 
+    paste0(":")
     
   # Rename the post_ps variable as it's automatically called '.' when converted from a list, which is problematic.
   names(post_ps) <- "text"
@@ -120,6 +131,7 @@ get_post_content <- function(ep_df) {
       mutate(
         text = as.character(text),
         speaker = case_when(
+          str_detect(text, paste0("(", guest_initials, ")|(", guest, ":)")) ~ guest,
           str_detect(text, "(MH:)|(Michael Helbling:)|(Michael:)") ~ "Drunk Helbs",
           str_detect(text, "(MK:)|(Moe Kiss:)|(Moe:)") ~ "Moe from down under",
           str_detect(text, "(TW:)|(Tim Wilson:)|(Tim:)") ~ "Grumpy Cat",

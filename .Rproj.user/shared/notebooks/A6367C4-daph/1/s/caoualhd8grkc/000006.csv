@@ -1,5 +1,0 @@
-"0","monologue <- daph_post_text %>% "
-"0","  arrange(desc(duration)) %>% "
-"0","  top_n(10, duration) %>% "
-"0","  select(speaker, text, title, duration)"
-"0","monologue"
