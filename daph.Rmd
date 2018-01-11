@@ -208,12 +208,16 @@ saveRDS(daph_post_words, "datafiles/daph_post_words.rds")
 To settle the debate for good, which presenter is the most sweary by episode?
 
 ```{r}
+
+filter_presenters <- function(df) {
+  filter(df, str_detect(speaker, "(Drunk)|(under)|(Grumpy)"))
+}
 swears <- daph_post_words %>% 
   filter(str_detect(word, "(shit)|(fuck)|(crap)"))
 
 swears_by_speaker <- swears %>% 
   group_by(episode, speaker) %>% 
-  filter(speaker!= "Unknown") %>% 
+  filter_presenters() %>% 
   summarise(ep_count = n()) %>% 
   ungroup() %>% 
   group_by(speaker) %>% 
@@ -239,6 +243,7 @@ swears_by_speaker %>%
 
 
 words_by_speaker <- daph_post_words %>% 
+  filter_presenters() %>% 
   group_by(episode, speaker) %>% 
   filter(speaker!= "Unknown") %>% 
   summarise(ep_count = n()) %>% 
