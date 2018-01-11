@@ -26,6 +26,8 @@ library(knitr)
 library(tidyverse)
 library(forcats)
 library(lubridate)
+library(plotly)
+
 
 # Get the highest page count from the site
 max_pages <- read_html("http://www.analyticshour.io/all-podcast-episodes/") %>% 
@@ -224,7 +226,6 @@ wbs_be <- words_by_speaker %>%
     x = "Episode number",
     colour = "Speaker Name"
   )
-library(plotly)
 ggplotly(wbs_be)
 ```
 
