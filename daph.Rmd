@@ -72,7 +72,7 @@ get_url_list <- function(page_num) {
 # Pull the urls list from the site. Ignore the "Too many values" error, this comes from the call to separate()
 full_urls <- map_df(page_nums, get_url_list) 
 
-full_urls
+head(full_urls)
 
 # Split the url DF into a list so it can be iteratively called by map_df in the next step
 full_urls_split <- full_urls %>% 
@@ -84,12 +84,10 @@ full_urls_split <- full_urls %>%
 
 Next, we visit each URL in turn, traverse to the transcript and convert into a dataframe. We add on a little metadata in new columns (timecodes for the start & end of a given passage, speaker name, the episode name and episode URL)
 
-```{r}
-
-# Function to scrape the web content per url, append the episode #, year and speaker name (where known) then tokenize into words
+```{r get_post_content}
+# Function to scrape the web content per url, append the episode #, year and speaker name (where known) then tokenize into words. 
 get_post_content <- function(ep_df) {
-  # Quick line for debugging purposes
-  # print(paste("Running for :", ep_df$url))
+  
   url <- ep_df$url
   episode <- ep_df$episode
   year <- ep_df$year
@@ -111,7 +109,8 @@ get_post_content <- function(ep_df) {
   # Get the guest name and initials
   guest <- post_title %>% 
     str_extract("with [a-zA-Z]* [a-zA-Z]*") %>% 
-    str_replace_all(c("with " = ""))
+    str_replace_all(c("with " = "")) %>% 
+    as.character()
   
   guest_initials <- guest %>% 
     str_extract_all("\\b[a-zA-Z]") %>% 
@@ -155,12 +154,14 @@ get_post_content <- function(ep_df) {
   }
 }
 
-daph_post_text <- map_df(full_urls_split, get_post_content) %>% 
-  arrange(episode, time_start)
-saveRDS(daph_post_text, "datafiles/daph_post_text.rds") # Storing as an rds file locally to avoid 
-daph_post_text
 ```
 
+```{r}
+daph_post_text <- map_df(full_urls_split, get_post_content) %>% 
+  arrange(episode, time_start)
+
+head(daph_post_text, 3)
+```
 
 ---
 
@@ -170,24 +171,21 @@ Now that we have our post text and post words dataframes, we can take a look at 
 
 Off the bat, we can find out the longest sentence of all time, and who spoke it.
 
-```{r}
+```{r monologue}
 monologue <- daph_post_text %>% 
   filter(speaker != "Unknown") %>% 
   arrange(desc(duration)) %>% 
   top_n(10, duration) %>% 
   select(speaker, text, title, duration)
-
-monologue
 ```
 
-So, our champion monologue is this gem from Tim Wilson in Episode 71, "Reinforcement Learning with Matt Gershoff". Hats off to Tim for the final sentence. At `monologue$duration[1]` seconds long, it stands a full `avg_duration <- mean(daph_post_text$duration, na.rm = TRUE); monologue$duration[1]-avgduration` seconds above the average speaking length of `avg_duration`s.
+So, our champion monologue is this gem from Tim Wilson in Episode 71, "Reinforcement Learning with Matt Gershoff". Hats off to Tim for the final sentence. At `{r} monologue$duration[1]` seconds long, it stands a full `{r} avg_duration <- mean(daph_post_text$duration, na.rm = TRUE); monologue$duration[1]-avgduration` seconds above the average speaking length of `{r} avg_duration`s.
 
 ```{r}
 monologue$text[1]
 ```
 
----
-
+--- 
 
 ## Tokenize our words
 
@@ -198,7 +196,7 @@ data("stop_words")
 daph_post_words <- daph_post_text %>% 
       unnest_tokens(output = word, input = text, format = "text") %>% 
   anti_join(stop_words)
-saveRDS(daph_post_words, "datafiles/daph_post_words.rds")
+
 ```
 
 ---
@@ -240,8 +238,6 @@ swears_by_speaker %>%
 
 ```{r}
 # word count per episode by presenter
-
-
 words_by_speaker <- daph_post_words %>% 
   filter_presenters() %>% 
   group_by(episode, speaker) %>% 
