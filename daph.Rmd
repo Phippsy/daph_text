@@ -61,14 +61,21 @@ get_url_list <- function(page_num) {
 # Pull the urls list from the site. Ignore the "Too many values" error, this comes from the call to separate()
 full_urls <- map_df(page_nums, get_url_list) 
 
-# Split the url DF into a list so it can be called by map_df below
+
+# Split the url DF into a list so it can be iteratively called by map_df in the next step
 full_urls_split <- full_urls %>% 
   split(.$episode)
 
-# Function to scrape the web content per url, append the episode #, year and speaker name (where known) then tokenize into words
+```
+
+## Scraping the transcripts
+
+Next, we visit each URL in turn, traverse to the transcript and convert into a dataframe. We add on a little metadata in new columns (timecodes for the start & end of a given passage, speaker name, the episode name and episode URL)
+
+```{r get_post_content}
+# Function to scrape the web content per url, append the episode #, year and speaker name (where known) then tokenize into words. 
 get_post_content <- function(ep_df) {
-  # Quick line for debugging purposes
-  # print(paste("Running for :", ep_df$url))
+  
   url <- ep_df$url
   episode <- ep_df$episode
   year <- ep_df$year
@@ -84,6 +91,18 @@ get_post_content <- function(ep_df) {
     html_nodes(".entry-title") %>% 
     html_text() %>% 
     as.character()
+
+  # Get the guest name and initials
+  guest <- post_title %>% 
+    str_extract("with [a-zA-Z]* [a-zA-Z]*") %>% 
+    str_replace_all(c("with " = "")) %>% 
+    as.character()
+  
+  guest_initials <- guest %>% 
+    str_extract_all("\\b[a-zA-Z]") %>% 
+    unlist() %>% 
+    str_c(collapse = "") %>% 
+    paste0(":")
     
   names(post_ps) <- "text"
   
@@ -95,6 +114,7 @@ get_post_content <- function(ep_df) {
       mutate(
         text = as.character(text),
         speaker = case_when(
+          str_detect(text, paste0("(", guest_initials, ")|(", guest, ":)")) ~ guest,
           str_detect(text, "(MH:)|(Michael Helbling:)|(Michael:)") ~ "Drunk Helbs",
           str_detect(text, "(MK:)|(Moe Kiss:)|(Moe:)") ~ "Moe from down under",
           str_detect(text, "(TW:)|(Tim Wilson:)|(Tim:)") ~ "Grumpy Cat",
@@ -114,11 +134,11 @@ get_post_content <- function(ep_df) {
   }
 }
 
-daph_post_text <- map_df(full_urls_split, get_post_content)      
-saveRDS(daph_post_text, "datafiles/daph_post_text.rds")
+daph_post_text <- map_df(full_urls_split, get_post_content) %>% 
+  arrange(episode, time_start)
 
+head(daph_post_text, 3)
 ```
-
 
 ---
 
@@ -126,7 +146,7 @@ saveRDS(daph_post_text, "datafiles/daph_post_text.rds")
 
 Off the bat, we can find out the longest sentence of all time, and who spoke it.
 
-```{r}
+```{r monologue}
 monologue <- daph_post_text %>% 
   arrange(desc(duration)) %>% 
   top_n(10, duration) %>% 
@@ -134,14 +154,13 @@ monologue <- daph_post_text %>%
 
 ```
 
-So, our champion monologue is this gem from Tim Wilson in Episode 71, "Reinforcement Learning with Matt Gershoff". Hats off to Tim for the final sentence. At `monologue$duration[1]` seconds long, it stands a full `avg_duration <- mean(daph_post_text$duration, na.rm = TRUE); monologue$duration[1]-avgduration` seconds above the average speaking length of `avg_duration`s.
+So, our champion monologue is this gem from Tim Wilson in Episode 71, "Reinforcement Learning with Matt Gershoff". Hats off to Tim for the final sentence. At `{r} monologue$duration[1]` seconds long, it stands a full `{r} avg_duration <- mean(daph_post_text$duration, na.rm = TRUE); monologue$duration[1]-avgduration` seconds above the average speaking length of `{r} avg_duration`s.
 
 ```{r}
 monologue$text[1]
 ```
 
----
-
+--- 
 
 ## Tokenize our words
 
@@ -154,7 +173,7 @@ daph_post_words <- daph_post_text %>%
       unnest_tokens(output = word, input = text, format = "text") %>% 
   anti_join(stop_words) %>% 
   filter(!str_detect(word, "\\d{2}"))
-saveRDS(daph_post_words, "datafiles/daph_post_words.rds")
+
 ```
 
 ---
@@ -192,8 +211,6 @@ swears_by_speaker %>%
 
 ```{r}
 # word count per episode by presenter
-
-
 words_by_speaker <- daph_post_words %>% 
   group_by(episode, speaker) %>% 
   filter(speaker!= "Unknown") %>% 
